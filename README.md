@@ -1,6 +1,6 @@
 # Terminal de bord — Interface 2037
 
-Un faux terminal d'ordinateur de bord façon *Alien* (MU-TH-UR 6000) pour tes parties du jeu de rôle **Alien**. Le Maître du Jeu joue l'IA du vaisseau depuis une console de contrôle ; chaque joueur voit un écran CRT vert phosphore sur lequel les réponses de l'IA s'affichent lettre par lettre, avec sons et effets d'écran cathodique.
+Un faux terminal d'ordinateur de bord façon *Alien* (MU-TH-UR 6500) pour tes parties du jeu de rôle **Alien**. Le Maître du Jeu joue l'IA du vaisseau depuis une console de contrôle ; chaque joueur voit un écran CRT vert phosphore sur lequel les réponses de l'IA s'affichent lettre par lettre, avec sons et effets d'écran cathodique.
 
 Aucune dépendance : un seul fichier Python (bibliothèque standard) + un fichier HTML.
 
