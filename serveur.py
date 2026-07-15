@@ -37,10 +37,12 @@ RESERVED = {"mj", "gm", "maitre", "maître", "admin", "ia", "tous", "all"}
 
 # ----------------------- ÉTAT PARTAGÉ -----------------------
 lock = threading.Lock()
-state = {"users": {}, "messages": [], "next_id": 1, "codes": {}}
+state = {"users": {}, "messages": [], "next_id": 1, "codes": {}, "timer": None}
 # users : token -> {"name":..., "role":"player"/"gm", "last_seen":epoch}
 # messages : [{"id","frm","to","text","kind","speed","ts"}]
 # codes : nom_en_minuscules -> code d'accès du personnage (choisi au 1er login)
+# timer : None ou {"remaining":sec, "total":sec, "rate":float, "updated":epoch}
+#         rate = vitesse d'écoulement (0 = pause, 1 = temps réel, 2 = double)
 
 
 def load_state():
@@ -52,6 +54,7 @@ def load_state():
         state["messages"] = data.get("messages", [])
         state["next_id"] = data.get("next_id", 1)
         state["codes"] = data.get("codes", {})
+        state["timer"] = data.get("timer")
         print("[i] Partie précédente rechargée depuis partie.json")
     except Exception as e:
         print("[!] Impossible de recharger partie.json :", e)
@@ -63,7 +66,7 @@ def save_state():
     try:
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
             json.dump({"messages": state["messages"], "next_id": state["next_id"],
-                       "codes": state["codes"]},
+                       "codes": state["codes"], "timer": state.get("timer")},
                       f, ensure_ascii=False)
     except Exception as e:
         print("[!] Sauvegarde impossible :", e)
@@ -80,6 +83,15 @@ def player_list():
             seen[nm] = u["last_seen"]
     return [{"name": nm, "online": (now - ls) < ONLINE_WINDOW}
             for nm, ls in sorted(seen.items())]
+
+
+def timer_snapshot():
+    """État actuel du compte à rebours (temps restant calculé côté serveur)."""
+    t = state.get("timer")
+    if not t:
+        return None
+    rem = max(0.0, t["remaining"] - (time.time() - t["updated"]) * t["rate"])
+    return {"remaining": rem, "total": t.get("total", 0), "rate": t["rate"]}
 
 
 def visible_for(user, msg):
@@ -137,7 +149,8 @@ class Handler(BaseHTTPRequestHandler):
                 msgs = [m for m in state["messages"]
                         if m["id"] > since and visible_for(user, m)]
                 players = player_list() if user["role"] == "gm" else []
-                return self._json({"messages": msgs, "players": players, "now": time.time()})
+                return self._json({"messages": msgs, "players": players,
+                                   "timer": timer_snapshot(), "now": time.time()})
 
         return self._json({"error": "not found"}, 404)
 
@@ -196,6 +209,48 @@ class Handler(BaseHTTPRequestHandler):
                     del state["users"][tk]
                 save_state()
             return self._json({"ok": True})
+
+        if path == "/api/timer":
+            # MJ uniquement : compte à rebours diffusé à tous les joueurs.
+            # actions : start (minutes, rate) / rate (rate) / stop
+            token = data.get("token", "")
+            with lock:
+                user = self._auth(token)
+                if not user or user["role"] != "gm":
+                    return self._json({"error": "Non autorisé."})
+                action = data.get("action")
+                now = time.time()
+
+                def clamp_rate(v):
+                    try:
+                        return min(max(float(v), 0.0), 4.0)
+                    except (TypeError, ValueError):
+                        return 1.0
+
+                if action == "start":
+                    try:
+                        minutes = float(data.get("minutes", 0))
+                    except (TypeError, ValueError):
+                        minutes = 0
+                    if not (0 < minutes <= 24 * 60):
+                        return self._json({"error": "Durée invalide."})
+                    secs = minutes * 60
+                    state["timer"] = {"remaining": secs, "total": secs,
+                                      "rate": clamp_rate(data.get("rate", 1)),
+                                      "updated": now}
+                elif action == "rate":
+                    t = state.get("timer")
+                    if t:
+                        # fige le temps déjà écoulé puis applique la nouvelle vitesse
+                        t["remaining"] = max(0.0, t["remaining"] - (now - t["updated"]) * t["rate"])
+                        t["updated"] = now
+                        t["rate"] = clamp_rate(data.get("rate", 1))
+                elif action == "stop":
+                    state["timer"] = None
+                else:
+                    return self._json({"error": "Action inconnue."})
+                save_state()
+                return self._json({"ok": True, "timer": timer_snapshot()})
 
         if path == "/api/send":
             token = data.get("token", "")

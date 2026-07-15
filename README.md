@@ -40,6 +40,12 @@ Le bouton **RÉINIT. CODE** en haut d'un canal privé efface le code d'accès du
 
 Les puces au-dessus de la zone d'envoi insèrent des répliques prédéfinies (« ACCÈS REFUSÉ », « ANALYSE… », etc.). Le bouton **✎ GÉRER** ouvre un panneau pour les ajouter, modifier ou supprimer. Tout est sauvegardé automatiquement dans le navigateur et retrouvé d'une session à l'autre.
 
+### Compte à rebours d'urgence
+
+Le bouton **⏱ COMPTE À REBOURS** de la console MJ ouvre un panneau dédié pour lancer un minuteur diffusé à **tous** les joueurs. Sur leur terminal, tout l'écran bascule en **thème d'alerte rouge** et le temps restant s'affiche dans le bandeau du haut (alarme au lancement, bips sur les 10 dernières secondes, clignotement à zéro). **■ ARRÊTER** rend aux joueurs leur thème habituel (vert ou ambre). Quand un minuteur tourne, le bouton de la console affiche le temps restant en continu, panneau fermé.
+
+Le curseur **Écoulement du temps** contrôle la vitesse réelle du minuteur, de ×0 (pause) à ×2 : pratique pour accorder discrètement un sursis aux joueurs ou mettre la pression. Rien ne trahit la manipulation côté joueur — les chiffres défilent simplement plus ou moins vite. Le minuteur est synchronisé par le serveur : tous les écrans affichent le même temps, et il survit à un rafraîchissement de page.
+
 ## Jouer à distance
 
 Le plus simple : un tunnel Cloudflare (gratuit, sans compte), sans rien changer au code ni ouvrir de port sur ta box.
