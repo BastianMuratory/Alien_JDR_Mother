@@ -153,7 +153,7 @@
   .chip.manage{border-style:dashed;color:var(--phosphor);}
 
   /* ---------- PANNEAU MESSAGES RAPIDES / COMPTE À REBOURS ---------- */
-  #quickPanel,#timerPanel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:30;}
+  #quickPanel,#timerPanel,#userPanel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:30;}
   .qcard{width:min(700px,94vw);max-height:86vh;display:flex;flex-direction:column;background:#070b09;border:1px solid var(--phosphor-dim);padding:18px 20px;}
   .qcard .qtitle{font-family:'VT323',monospace;font-size:26px;color:var(--phosphor);letter-spacing:1px;}
   .qcard .qsub{font-size:12px;color:var(--phosphor-dim);margin:4px 0 14px;}
@@ -167,6 +167,26 @@
   .qrow .qdel{flex:0 0 auto;background:transparent;color:var(--alert);border:1px solid var(--panel-line);cursor:pointer;padding:0 10px;font-family:'Share Tech Mono',monospace;}
   .qrow .qdel:hover{border-color:var(--alert);}
   .qbtns{display:flex;gap:10px;margin-top:12px;align-items:center;}
+
+  /* ---------- PANNEAU ÉQUIPAGE ---------- */
+  #uList{flex:1;overflow-y:auto;min-height:60px;margin-top:12px;scrollbar-width:thin;scrollbar-color:var(--phosphor-dim) transparent;}
+  .urow{display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--panel-line);font-size:13px;flex-wrap:wrap;}
+  .urow .udot{width:8px;height:8px;border-radius:50%;background:#333;flex:0 0 auto;}
+  .urow .udot.on{background:var(--phosphor);box-shadow:0 0 6px var(--glow);}
+  .urow .unm{min-width:110px;font-size:15px;color:var(--phosphor);}
+  .urow .ucode{font-size:12px;color:var(--phosphor-dim);cursor:pointer;min-width:110px;user-select:none;}
+  .urow .ucode:hover{color:var(--phosphor);}
+  .urow .umeta{font-size:11px;color:var(--phosphor-dim);}
+  .urow .uact{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;}
+  .ucreate{border-bottom:1px solid var(--phosphor-dim);padding-bottom:12px;}
+  .ucreate input{background:#020604;color:var(--phosphor);border:1px solid var(--panel-line);
+    font-family:'Share Tech Mono',monospace;font-size:13px;padding:8px 9px;outline:none;flex:1;min-width:130px;}
+  .ucreate input:focus{border-color:var(--phosphor-dim);}
+  .ubtn{font-size:11px;background:transparent;color:var(--phosphor-dim);border:1px solid var(--panel-line);
+    padding:5px 9px;cursor:pointer;font-family:'Share Tech Mono',monospace;white-space:nowrap;}
+  .ubtn:hover{color:var(--phosphor);border-color:var(--phosphor-dim);}
+  .ubtn.danger{color:var(--alert);}
+  .ubtn.danger:hover{border-color:var(--alert);}
   .gmrow2{display:flex;gap:10px;}
   #gInput{flex:1;resize:none;height:58px;background:#020604;color:var(--phosphor);border:1px solid var(--phosphor-dim);
     font-family:'Share Tech Mono',monospace;font-size:15px;padding:9px 12px;outline:none;}
@@ -258,6 +278,7 @@
       <span class="id">CONSOLE MJ</span>
       <span>INTERFACE 2037 — PANNEAU DE CONTRÔLE</span>
       <span class="spacer"></span>
+      <button class="linkbtn" id="uOpen">👥 ÉQUIPAGE</button>
       <span class="stat" id="gmClock">--:--:--</span>
     </div>
     <div class="gmbody">
@@ -304,6 +325,25 @@
   </div>
 </div>
 
+<!-- ---------- PANNEAU ÉQUIPAGE (MJ) ---------- -->
+<div id="userPanel">
+  <div class="qcard">
+    <div class="qtitle">👥 GESTION DE L'ÉQUIPAGE</div>
+    <div class="qsub">Créer un personnage à l'avance (donne le nom + code au joueur), changer un code, renommer, déconnecter ou supprimer. Clique sur "••••" pour révéler un code.</div>
+    <div class="urow ucreate">
+      <input id="uName" placeholder="Nom du personnage" maxlength="32" autocomplete="off">
+      <input id="uCode" placeholder="Code d'accès" maxlength="64" autocomplete="off">
+      <button class="btn" id="uCreate">+ CRÉER</button>
+    </div>
+    <div id="uList"></div>
+    <div class="qbtns">
+      <span class="qsub" id="uInfo" style="margin:0;"></span>
+      <span style="flex:1"></span>
+      <button class="btn primary" id="uClose">FERMER</button>
+    </div>
+  </div>
+</div>
+
 <!-- ---------- PANNEAU COMPTE À REBOURS (MJ) ---------- -->
 <div id="timerPanel">
   <div class="qcard" style="width:min(540px,94vw);">
@@ -340,7 +380,8 @@
     async resetCode(name){ return (await fetch('/api/resetcode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,name})})).json(); },
     async timer(body){ return (await fetch('/api/timer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,token:TOKEN})})).json(); },
     async clearAll(){ return (await fetch('/api/clearall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})})).json(); },
-    async delMsg(id){ return (await fetch('/api/delmsg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,id})})).json(); }
+    async delMsg(id){ return (await fetch('/api/delmsg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,id})})).json(); },
+    async users(body){ return (await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,token:TOKEN})})).json(); }
   };
 
   let TOKEN=null, NAME=null, ROLE=null, SINCE=0, FIRST=true;
@@ -600,8 +641,78 @@
     });
     if(!presets.length){ const e=document.createElement('div'); e.className='qsub'; e.textContent='Aucun message. Clique sur + AJOUTER.'; list.appendChild(e); }
   }
+  // ---------- gestion équipage (MJ) ----------
+  async function loadUsers(){
+    const r=await api.users({action:'list'});
+    const list=$('uList'); list.innerHTML='';
+    if(r.error){ const e=document.createElement('div'); e.className='qsub'; e.textContent=r.error; list.appendChild(e); return; }
+    $('uInfo').textContent=r.users.length+' personnage(s) · '+r.users.filter(u=>u.online).length+' en ligne';
+    if(!r.users.length){
+      const e=document.createElement('div'); e.className='qsub';
+      e.textContent='Aucun personnage. Crée-en un ci-dessus, ou attends une première connexion.';
+      list.appendChild(e); return;
+    }
+    r.users.forEach(u=>{
+      const row=document.createElement('div'); row.className='urow';
+      const dot=document.createElement('span'); dot.className='udot'+(u.online?' on':''); dot.title=u.online?'En ligne':'Hors ligne';
+      const nm=document.createElement('span'); nm.className='unm'; nm.textContent=u.name;
+      const code=document.createElement('span'); code.className='ucode'; code.title='Cliquer pour afficher / masquer le code';
+      let shown=false;
+      const updCode=()=>{ code.textContent='CODE : '+(u.code==null?'— non défini':(shown?u.code:'••••')); };
+      code.onclick=()=>{ shown=!shown; updCode(); }; updCode();
+      const meta=document.createElement('span'); meta.className='umeta'; meta.textContent=u.msgs+' msg';
+      const act=document.createElement('span'); act.className='uact';
+      const mk=(txt,title,cls,fn)=>{ const b=document.createElement('button'); b.className='ubtn'+(cls?' '+cls:''); b.textContent=txt; b.title=title; b.onclick=fn; act.appendChild(b); };
+      mk('🔑 CODE','Changer le code d\'accès','',async()=>{
+        const c=prompt('Nouveau code d\'accès pour '+u.name+' :\n(ses sessions actives seront déconnectées)');
+        if(c==null||!c.trim()) return;
+        const r=await api.users({action:'setcode',name:u.name,code:c.trim()});
+        if(r.error) alert(r.error);
+        loadUsers();
+      });
+      mk('✎ NOM','Renommer le personnage (historique conservé)','',async()=>{
+        const n=prompt('Nouveau nom pour '+u.name+' :');
+        if(n==null||!n.trim()) return;
+        const r=await api.users({action:'rename',name:u.name,new:n.trim()});
+        if(r.error){ alert(r.error); return; }
+        const nn=n.trim();
+        allMsgs.forEach(m=>{ if(m.frm===u.name)m.frm=nn; if(m.to===u.name)m.to=nn; });
+        if(selected===u.name){ selected=nn; renderConv._force=true; renderConv(); }
+        renderSidebar(); loadUsers();
+      });
+      mk('⏻','Déconnecter ses sessions (le code reste valable)','',async()=>{
+        if(!confirm('Déconnecter '+u.name+' ?\nIl pourra se reconnecter avec son code.')) return;
+        const r=await api.users({action:'kick',name:u.name});
+        if(r.error) alert(r.error);
+        loadUsers();
+      });
+      mk('🗑','Supprimer le personnage','danger',async()=>{
+        if(!confirm('Supprimer '+u.name+' ?\nSon code sera effacé et ses sessions déconnectées.')) return;
+        const purge=confirm('Supprimer AUSSI tout son historique de messages ?\n\nOK = supprimer l\'historique\nAnnuler = le conserver');
+        const r=await api.users({action:'delete',name:u.name,purge});
+        if(r.error){ alert(r.error); return; }
+        if(purge){ for(let i=allMsgs.length-1;i>=0;i--){ if(allMsgs[i].frm===u.name||allMsgs[i].to===u.name) allMsgs.splice(i,1); } }
+        if(selected===u.name){ selected=null; $('convHead').textContent='Sélectionne un joueur'; $('gmLog').innerHTML=''; }
+        renderSidebar(); loadUsers();
+      });
+      row.append(dot,nm,code,meta,act); list.appendChild(row);
+    });
+  }
   function initGm(){
     renderQuick();
+    // --- équipage ---
+    $('uOpen').onclick=()=>{ $('userPanel').style.display='flex'; loadUsers(); };
+    $('uClose').onclick=()=>{ $('userPanel').style.display='none'; };
+    $('userPanel').addEventListener('click',e=>{ if(e.target.id==='userPanel') $('userPanel').style.display='none'; });
+    $('uCreate').onclick=async()=>{
+      const n=$('uName').value.trim(), c=$('uCode').value.trim();
+      if(!n||!c){ alert('Nom et code d\'accès requis.'); return; }
+      const r=await api.users({action:'create',name:n,code:c});
+      if(r.error){ alert(r.error); return; }
+      $('uName').value=''; $('uCode').value='';
+      loadUsers(); renderSidebar();
+    };
+    $('uCode').addEventListener('keydown',e=>{ if(e.key==='Enter') $('uCreate').click(); });
     $('qAdd').onclick=()=>{ presets.push({label:'NOUVEAU',text:''}); savePresets(); renderQuickPanel(); const rows=$('qList').querySelectorAll('.qrow input'); if(rows.length) rows[rows.length-1].select(); };
     $('qReset').onclick=()=>{ if(confirm('Rétablir les messages par défaut ? Tes messages personnalisés seront perdus.')){ presets=DEFAULT_PRESETS.map(p=>({...p})); savePresets(); renderQuickPanel(); } };
     $('qClose').onclick=()=>{ $('quickPanel').style.display='none'; renderQuick(); };

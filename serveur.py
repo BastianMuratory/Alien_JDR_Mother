@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ----------------------- CONFIGURATION -----------------------
-VERSION = "1.3"           # affiché au démarrage — si le bandeau ne montre pas cette
+VERSION = "1.4"           # affiché au démarrage — si le bandeau ne montre pas cette
                           # version, un ANCIEN serveur tourne encore (port occupé)
 HOST = "0.0.0.0"          # 0.0.0.0 = accessible depuis tout le réseau local
 PORT = 8000
@@ -39,10 +39,11 @@ RESERVED = {"mj", "gm", "maitre", "maître", "admin", "ia", "tous", "all"}
 
 # ----------------------- ÉTAT PARTAGÉ -----------------------
 lock = threading.Lock()
-state = {"users": {}, "messages": [], "next_id": 1, "codes": {}, "timer": None}
+state = {"users": {}, "messages": [], "next_id": 1, "codes": {}, "names": {}, "timer": None}
 # users : token -> {"name":..., "role":"player"/"gm", "last_seen":epoch}
 # messages : [{"id","frm","to","text","kind","speed","ts"}]
 # codes : nom_en_minuscules -> code d'accès du personnage (choisi au 1er login)
+# names : nom_en_minuscules -> nom d'affichage (avec majuscules)
 # timer : None ou {"remaining":sec, "total":sec, "rate":float, "updated":epoch}
 #         rate = vitesse d'écoulement (0 = pause, 1 = temps réel, 2 = double)
 
@@ -56,6 +57,7 @@ def load_state():
         state["messages"] = data.get("messages", [])
         state["next_id"] = data.get("next_id", 1)
         state["codes"] = data.get("codes", {})
+        state["names"] = data.get("names", {})
         state["timer"] = data.get("timer")
         print("[i] Partie précédente rechargée depuis partie.json")
     except Exception as e:
@@ -68,7 +70,8 @@ def save_state():
     try:
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
             json.dump({"messages": state["messages"], "next_id": state["next_id"],
-                       "codes": state["codes"], "timer": state.get("timer")},
+                       "codes": state["codes"], "names": state.get("names", {}),
+                       "timer": state.get("timer")},
                       f, ensure_ascii=False)
     except Exception as e:
         print("[!] Sauvegarde impossible :", e)
@@ -83,6 +86,13 @@ def player_list():
         nm = u["name"]
         if nm not in seen or u["last_seen"] > seen[nm]:
             seen[nm] = u["last_seen"]
+    # personnages enregistrés (code défini) mais actuellement hors ligne :
+    # le MJ les voit dans sa liste et peut leur écrire à l'avance
+    names = state.get("names", {})
+    lowseen = {n.lower() for n in seen}
+    for key in state.get("codes", {}):
+        if key not in lowseen:
+            seen[names.get(key, key)] = 0
     return [{"name": nm, "online": (now - ls) < ONLINE_WINDOW}
             for nm, ls in sorted(seen.items())]
 
@@ -188,7 +198,9 @@ class Handler(BaseHTTPRequestHandler):
                         return self._json({"error": "Code incorrect pour ce personnage."})
                 else:
                     codes[key] = code   # premier accès : le code est enregistré
-                    save_state()
+                if state.setdefault("names", {}).get(key) != name:
+                    state["names"][key] = name
+                save_state()
                 token = uuid.uuid4().hex
                 state["users"][token] = {"name": name, "role": role, "last_seen": time.time()}
             return self._json({"token": token, "name": name, "role": role})
@@ -211,6 +223,119 @@ class Handler(BaseHTTPRequestHandler):
                     del state["users"][tk]
                 save_state()
             return self._json({"ok": True})
+
+        if path == "/api/users":
+            # MJ uniquement : gestion de l'équipage.
+            # actions : list / create / setcode / rename / kick / delete
+            token = data.get("token", "")
+            with lock:
+                user = self._auth(token)
+                if not user or user["role"] != "gm":
+                    return self._json({"error": "Non autorisé."})
+                action = data.get("action", "list")
+                codes = state.setdefault("codes", {})
+                names = state.setdefault("names", {})
+
+                def kick(nlow):
+                    tks = [t for t, u in state["users"].items()
+                           if u["role"] == "player" and u["name"].lower() == nlow]
+                    for t in tks:
+                        del state["users"][t]
+                    return len(tks)
+
+                if action == "list":
+                    now = time.time()
+                    lastseen = {}
+                    for u in state["users"].values():
+                        if u["role"] != "player":
+                            continue
+                        nl = u["name"].lower()
+                        lastseen[nl] = max(lastseen.get(nl, 0), u["last_seen"])
+                    known = set(codes) | set(lastseen)
+                    for m in state["messages"]:
+                        for nm in (m.get("frm"), m.get("to")):
+                            if nm and nm not in ("MJ", "all"):
+                                known.add(nm.lower())
+                    out = []
+                    for nl in sorted(known):
+                        nmsg = sum(1 for m in state["messages"]
+                                   if m.get("frm", "").lower() == nl
+                                   or m.get("to", "").lower() == nl)
+                        ls = lastseen.get(nl)
+                        out.append({"name": names.get(nl, nl),
+                                    "online": ls is not None and (now - ls) < ONLINE_WINDOW,
+                                    "code": codes.get(nl), "msgs": nmsg,
+                                    "last_seen": ls})
+                    return self._json({"users": out})
+
+                name = (data.get("name") or "").strip()[:32]
+                nlow = name.lower()
+                if not name:
+                    return self._json({"error": "Nom manquant."})
+
+                if action == "create":
+                    if nlow in RESERVED:
+                        return self._json({"error": "Ce nom est réservé."})
+                    if nlow in codes:
+                        return self._json({"error": "Ce personnage existe déjà."})
+                    code = (data.get("code") or "").strip()[:64]
+                    if not code:
+                        return self._json({"error": "Code d'accès requis."})
+                    codes[nlow] = code
+                    names[nlow] = name
+                    save_state()
+                    return self._json({"ok": True})
+
+                if action == "setcode":
+                    code = (data.get("code") or "").strip()[:64]
+                    if not code:
+                        return self._json({"error": "Code d'accès requis."})
+                    codes[nlow] = code
+                    names.setdefault(nlow, name)
+                    kick(nlow)  # il se reconnectera avec le nouveau code
+                    save_state()
+                    return self._json({"ok": True})
+
+                if action == "rename":
+                    new = (data.get("new") or "").strip()[:32]
+                    newlow = new.lower()
+                    if not new:
+                        return self._json({"error": "Nouveau nom manquant."})
+                    if newlow in RESERVED:
+                        return self._json({"error": "Ce nom est réservé."})
+                    if newlow != nlow and (newlow in codes or newlow in names):
+                        return self._json({"error": "Ce nom est déjà pris."})
+                    if nlow in codes:
+                        codes[newlow] = codes.pop(nlow)
+                    names.pop(nlow, None)
+                    names[newlow] = new
+                    for m in state["messages"]:
+                        if m.get("frm", "").lower() == nlow:
+                            m["frm"] = new
+                        if m.get("to", "").lower() == nlow:
+                            m["to"] = new
+                    for u in state["users"].values():
+                        if u["role"] == "player" and u["name"].lower() == nlow:
+                            u["name"] = new
+                    save_state()
+                    return self._json({"ok": True})
+
+                if action == "kick":
+                    n = kick(nlow)
+                    return self._json({"ok": True, "kicked": n})
+
+                if action == "delete":
+                    codes.pop(nlow, None)
+                    names.pop(nlow, None)
+                    kick(nlow)
+                    if data.get("purge"):
+                        state["messages"] = [m for m in state["messages"]
+                                             if m.get("frm", "").lower() != nlow
+                                             and m.get("to", "").lower() != nlow]
+                    save_state()
+                    return self._json({"ok": True})
+
+                return self._json({"error": "Action inconnue."})
 
         if path == "/api/delmsg":
             # MJ uniquement : supprime UN message (historique + écran du joueur).
