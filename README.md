@@ -24,13 +24,17 @@ Aucune dépendance : un seul fichier Python (bibliothèque standard) + un fichie
 
 Le joueur entre le nom de son personnage et un **code d'accès personnel** : le code choisi à la première connexion est enregistré pour ce personnage, et sera exigé à chaque connexion suivante. Personne ne peut donc lire les conversations d'un autre en tapant simplement son nom.
 
-Sur son terminal, le joueur ne voit que ce qui lui est adressé (canal privé ou diffusion générale). Il peut poser des questions à l'IA — elles n'arrivent qu'au MJ. Boutons en haut à droite : **SON** (bips de frappe, alertes), **AMBRE** (thème orange), **CRT** (désactiver les effets d'écran).
+Sur son terminal, le joueur ne voit que ce qui lui est adressé (canal privé ou diffusion générale). Il peut poser des questions à l'IA — elles n'arrivent qu'au MJ. Boutons en haut à droite : **AFFICHAGE** (ANIMÉ = lettre par lettre, INSTANT = messages affichés d'un bloc), **SON** (bips de frappe, alertes), **AMBRE** (thème orange), **CRT** (désactiver les effets d'écran). Ces préférences sont mémorisées par le navigateur.
 
 ## Côté MJ
 
 ![Console MJ](captures/03-console-mj.png)
 
 La console MJ affiche un canal par joueur (pastille verte = en ligne, badge rouge = messages non lus) plus un canal **TOUS** pour la diffusion générale. Pour chaque message tu contrôles la **vitesse de frappe** sur l'écran du joueur, et tu disposes de boutons **⚠ ALERTE** (texte rouge + son d'alarme), **DÉMARRAGE** (séquence de boot sur son écran) et **EFFACER SON ÉCRAN**.
+
+Au survol d'un message dans une conversation, un bouton **✕** apparaît : il supprime ce message précis, partout — historique serveur, console MJ, et lignes déjà affichées sur l'écran du joueur (même s'il est en train de s'écrire lettre par lettre, il disparaîtra). Fonctionne sur les messages de l'IA comme sur les questions des joueurs, et sur le fil de diffusion générale.
+
+Sur le canal **TOUS**, le bouton **🗑 VIDER LE FIL** supprime tout l'historique de la diffusion générale (y compris pour les joueurs qui se reconnecteront) et efface l'écran de tous les joueurs — les canaux privés ne sont pas touchés.
 
 Le bouton **RÉINIT. CODE** en haut d'un canal privé efface le code d'accès du personnage si un joueur l'a oublié : ses sessions sont déconnectées et il choisira un nouveau code à sa prochaine connexion.
 

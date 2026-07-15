@@ -24,6 +24,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # ----------------------- CONFIGURATION -----------------------
+VERSION = "1.3"           # affiché au démarrage — si le bandeau ne montre pas cette
+                          # version, un ANCIEN serveur tourne encore (port occupé)
 HOST = "0.0.0.0"          # 0.0.0.0 = accessible depuis tout le réseau local
 PORT = 8000
 ADMIN_CODE = "nostromo"   # <-- CHANGE-LE : c'est le code que TOI (MJ) tapes pour être admin
@@ -210,6 +212,49 @@ class Handler(BaseHTTPRequestHandler):
                 save_state()
             return self._json({"ok": True})
 
+        if path == "/api/delmsg":
+            # MJ uniquement : supprime UN message (historique + écran du joueur).
+            # Un message de contrôle kind="delete" est diffusé aux destinataires
+            # concernés pour retirer les lignes déjà affichées.
+            token = data.get("token", "")
+            with lock:
+                user = self._auth(token)
+                if not user or user["role"] != "gm":
+                    return self._json({"error": "Non autorisé."})
+                try:
+                    mid = int(data.get("id", 0))
+                except (TypeError, ValueError):
+                    mid = 0
+                target = next((m for m in state["messages"] if m["id"] == mid), None)
+                if not target:
+                    return self._json({"error": "Message introuvable."})
+                if target["kind"] not in ("text", "alert"):
+                    return self._json({"error": "Ce message ne peut pas être supprimé."})
+                state["messages"].remove(target)
+                audience = target["to"] if target["to"] != "MJ" else target["frm"]
+                msg = {"id": state["next_id"], "frm": "MJ", "to": audience,
+                       "text": str(mid), "kind": "delete", "speed": 0, "ts": time.time()}
+                state["next_id"] += 1
+                state["messages"].append(msg)
+                save_state()
+                return self._json({"ok": True})
+
+        if path == "/api/clearall":
+            # MJ uniquement : vide le fil de diffusion générale (historique
+            # supprimé) et efface l'écran de tous les joueurs.
+            token = data.get("token", "")
+            with lock:
+                user = self._auth(token)
+                if not user or user["role"] != "gm":
+                    return self._json({"error": "Non autorisé."})
+                state["messages"] = [m for m in state["messages"] if m.get("to") != "all"]
+                msg = {"id": state["next_id"], "frm": "MJ", "to": "all",
+                       "text": "", "kind": "clear", "speed": 0, "ts": time.time()}
+                state["next_id"] += 1
+                state["messages"].append(msg)
+                save_state()
+                return self._json({"ok": True, "id": msg["id"]})
+
         if path == "/api/timer":
             # MJ uniquement : compte à rebours diffusé à tous les joueurs.
             # actions : start (minutes, rate) / rate (rate) / stop
@@ -279,6 +324,9 @@ class Handler(BaseHTTPRequestHandler):
                 save_state()
                 return self._json({"ok": True, "id": msg["id"]})
 
+        if path.startswith("/api/"):
+            print(f"[!] Requête API inconnue : {path} — ce serveur (v{VERSION}) "
+                  "est-il bien la dernière version ?")
         return self._json({"error": "not found"}, 404)
 
     def _serve_index(self):
@@ -318,7 +366,7 @@ def main():
     load_state()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("=" * 56)
-    print(" TERMINAL DE BORD — serveur en ligne")
+    print(f" TERMINAL DE BORD — serveur en ligne (v{VERSION})")
     print("=" * 56)
     print(f"  MJ (toi)     : http://localhost:{PORT}")
     for ip in local_ips():

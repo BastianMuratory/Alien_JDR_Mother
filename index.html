@@ -61,8 +61,17 @@
     border-bottom:1px solid var(--phosphor-dim);font-family:'VT323',monospace;font-size:22px;
     letter-spacing:1px;text-shadow:0 0 8px var(--glow);flex:0 0 auto;z-index:5;
   }
-  .sysbar .id{color:#020402;background:var(--phosphor);padding:1px 10px;text-shadow:none;}
+  .sysbar{position:relative;}
+  .sysbar .id{color:#020402;background:var(--phosphor);padding:1px 10px;text-shadow:none;white-space:nowrap;}
   .sysbar .spacer{flex:1;}
+  #pWho{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+
+  /* menu options joueur */
+  #pOptions{position:absolute;top:100%;right:8px;display:none;flex-direction:column;gap:8px;
+    background:var(--panel);border:1px solid var(--phosphor-dim);padding:12px;z-index:15;min-width:220px;
+    box-shadow:0 8px 24px rgba(0,0,0,.7);}
+  #pOptions.open{display:flex;}
+  #pOptions .linkbtn{padding:11px 12px;font-size:13px;text-align:left;}
   .sysbar .stat{font-size:18px;opacity:.85;} .sysbar .stat b{color:var(--phosphor);}
   .linkbtn{font-family:'Share Tech Mono',monospace;font-size:12px;background:transparent;color:var(--phosphor-dim);
     border:1px solid var(--panel-line);padding:4px 8px;cursor:pointer;}
@@ -126,7 +135,11 @@
   .conv{flex:1;display:flex;flex-direction:column;min-width:0;}
   .convhead{padding:10px 16px;border-bottom:1px solid var(--panel-line);font-family:'VT323',monospace;font-size:22px;color:var(--phosphor);}
   .log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;font-size:15px;line-height:1.35;}
-  .msg{max-width:75%;padding:8px 12px;border:1px solid var(--panel-line);white-space:pre-wrap;word-break:break-word;}
+  .msg{position:relative;max-width:75%;padding:8px 12px;border:1px solid var(--panel-line);white-space:pre-wrap;word-break:break-word;}
+  .msg .mdel{position:absolute;top:-1px;right:-1px;display:none;background:#000;color:var(--alert);
+    border:1px solid var(--panel-line);font-size:10px;padding:1px 5px;cursor:pointer;font-family:'Share Tech Mono',monospace;}
+  .msg:hover .mdel{display:block;}
+  .msg .mdel:hover{border-color:var(--alert);}
   .msg.out{align-self:flex-end;border-color:var(--phosphor-dim);color:var(--phosphor);}
   .msg.out.alert{border-color:var(--alert);color:var(--alert);}
   .msg.in{align-self:flex-start;border-color:#2a3d31;color:#a9e8c3;}
@@ -173,6 +186,18 @@
   .gmctl .sep{width:1px;height:18px;background:var(--panel-line);}
   .gmctl label{display:flex;gap:6px;align-items:center;cursor:pointer;}
   .gmctl input[type=checkbox]{accent-color:var(--phosphor);}
+
+  /* ---------- MOBILE ---------- */
+  @media (max-width:640px){
+    .sysbar{gap:10px;padding:8px 10px;font-size:18px;flex-wrap:nowrap;}
+    .sysbar .stat{display:none;}
+    #pTimerBar{font-size:20px;letter-spacing:1px;}
+    .screen{padding:16px 14px 30px;font-size:clamp(18px,5vw,24px);}
+    .pconsole{padding:10px;}
+    #pInput{font-size:16px;} /* 16px min : évite le zoom auto iOS */
+    #pOptions{right:6px;left:6px;min-width:0;}
+    #pOptions .linkbtn{padding:13px 12px;font-size:14px;}
+  }
 </style>
 </head>
 <body>
@@ -209,9 +234,13 @@
       <span class="spacer"></span>
       <span id="pTimerBar">⚠ URGENCE — <span id="pTimerDigits">--:--</span></span>
       <span class="stat">ÉTAT : <b>EN LIGNE</b></span>
-      <button class="linkbtn" id="pSound">SON : ON</button>
-      <button class="linkbtn" id="pAmber">AMBRE</button>
-      <button class="linkbtn" id="pCrt">CRT</button>
+      <button class="linkbtn" id="pOptBtn">⚙ OPTIONS</button>
+      <div id="pOptions">
+        <button class="linkbtn" id="pInstant">AFFICHAGE : ANIMÉ</button>
+        <button class="linkbtn" id="pSound">SON : ON</button>
+        <button class="linkbtn" id="pAmber">THÈME : VERT</button>
+        <button class="linkbtn" id="pCrt">EFFETS CRT : ON</button>
+      </div>
     </div>
     <div class="stage">
       <div class="screen" id="pScreen"></div>
@@ -309,7 +338,9 @@
     async poll(token,since){ return (await fetch('/api/poll?token='+encodeURIComponent(token)+'&since='+since)).json(); },
     async send(body){ return (await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json(); },
     async resetCode(name){ return (await fetch('/api/resetcode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,name})})).json(); },
-    async timer(body){ return (await fetch('/api/timer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,token:TOKEN})})).json(); }
+    async timer(body){ return (await fetch('/api/timer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,token:TOKEN})})).json(); },
+    async clearAll(){ return (await fetch('/api/clearall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})})).json(); },
+    async delMsg(id){ return (await fetch('/api/delmsg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN,id})})).json(); }
   };
 
   let TOKEN=null, NAME=null, ROLE=null, SINCE=0, FIRST=true;
@@ -442,9 +473,24 @@
 
   // ============ JOUEUR ============
   const queue=[]; let typing=false;
+  let instantOn=(localStorage.getItem('itf2037_instant')??'0')==='1';
   function initPlayer(){
-    $('pAmber').onclick=()=>document.body.classList.toggle('amber');
-    $('pCrt').onclick=()=>document.body.classList.toggle('nofx');
+    // menu options
+    const ob=$('pOptBtn'), op=$('pOptions');
+    ob.onclick=e=>{ e.stopPropagation(); op.classList.toggle('open'); };
+    document.addEventListener('pointerdown',e=>{ if(!op.contains(e.target)&&e.target!==ob) op.classList.remove('open'); });
+    const ib=$('pInstant');
+    const updIb=()=>{ ib.textContent='AFFICHAGE : '+(instantOn?'INSTANT':'ANIMÉ'); };
+    ib.onclick=()=>{ instantOn=!instantOn; localStorage.setItem('itf2037_instant',instantOn?'1':'0'); updIb(); };
+    updIb();
+    const ab=$('pAmber'), cb=$('pCrt');
+    if(localStorage.getItem('itf2037_amber')==='1') document.body.classList.add('amber');
+    if(localStorage.getItem('itf2037_nofx')==='1') document.body.classList.add('nofx');
+    const updAb=()=>{ ab.textContent='THÈME : '+(document.body.classList.contains('amber')?'AMBRE':'VERT'); };
+    const updCb=()=>{ cb.textContent='EFFETS CRT : '+(document.body.classList.contains('nofx')?'OFF':'ON'); };
+    ab.onclick=()=>{ const on=document.body.classList.toggle('amber'); localStorage.setItem('itf2037_amber',on?'1':'0'); updAb(); };
+    cb.onclick=()=>{ const off=document.body.classList.toggle('nofx'); localStorage.setItem('itf2037_nofx',off?'1':'0'); updCb(); };
+    updAb(); updCb();
     $('pSend').onclick=sendQuestion;
     $('pInput').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendQuestion(); } });
     // débloque l'audio au premier geste (politique autoplay des navigateurs)
@@ -472,9 +518,11 @@
   const delay=ms=>new Promise(r=>setTimeout(r,ms));
   function rmCursor(){const c=$('pScreen').querySelector('.cursor'); if(c)c.remove();}
   function addCursor(){rmCursor();const c=document.createElement('span');c.className='cursor';$('pScreen').appendChild(c);}
-  async function typeLine(text,cls,speed,instant){
+  async function typeLine(text,cls,speed,instant,mid){
     rmCursor();
-    const line=document.createElement('div'); line.className='line '+cls; $('pScreen').appendChild(line);
+    const line=document.createElement('div'); line.className='line '+cls;
+    if(mid!=null) line.dataset.mid=mid;
+    $('pScreen').appendChild(line);
     if(instant||speed===0){ line.textContent=text; scr(); return; }
     for(const ch of text){ line.textContent+=ch; if(ch!==' ') tickSound(); scr(); await delay(Math.max(0,(70-speed)+(Math.random()*16-8))); }
     scr();
@@ -483,14 +531,19 @@
     if(typing) return; typing=true;
     while(queue.length){
       const m=queue.shift();
-      const instant = FIRST || m.frm===NAME;         // historique + ses propres msgs = instantané
+      const mine=(m.frm===NAME);
+      const instant = FIRST || mine || instantOn;    // historique, ses propres msgs, ou mode instantané
+      if(m.kind==='delete'){  // le MJ a supprimé un message : on retire ses lignes de l'écran
+        $('pScreen').querySelectorAll('.line[data-mid="'+m.text+'"]').forEach(n=>n.remove());
+        for(let i=queue.length-1;i>=0;i--) if(String(queue[i].id)===m.text) queue.splice(i,1);
+        continue;
+      }
       if(m.kind==='clear'){ $('pScreen').innerHTML=''; continue; }
       if(m.kind==='boot'){ await bootPlayer(instant); continue; }
-      const mine=(m.frm===NAME);
-      if(!instant && !mine){ if(m.kind==='alert') alertSound(); else msgSound(); }
+      if(!FIRST && !mine){ if(m.kind==='alert') alertSound(); else msgSound(); }
       const cls = mine?'you':(m.kind==='alert'?'alert':'prompt');
       const lines=(m.text||'').split('\n');
-      for(const l of lines) await typeLine(l,cls,m.speed||24,instant);
+      for(const l of lines) await typeLine(l,cls,m.speed||24,instant,m.id);
     }
     addCursor(); typing=false;
   }
@@ -622,12 +675,21 @@
     const el=document.createElement('div');
     el.className='thread'+(selected===key?' active':'')+(broadcast?' broadcast':'');
     el.innerHTML=(broadcast?'':'<span class="dot'+(online?' on':'')+'"></span>')+'<span class="nm">'+esc(label)+'</span>'+(unread?'<span class="badge">'+unread+'</span>':'');
-    el.onclick=()=>{ selected=key; lastRead[key]=SINCE; renderSidebar(); renderConv(); };
+    el.onclick=()=>{ selected=key; lastRead[key]=SINCE; renderSidebar(); renderConv._force=true; renderConv(); };
     return el;
   }
   function renderConv(){
     const head=$('convHead');
-    if(selected==='all'){ head.textContent='Diffusion à tout l\'équipage'; }
+    if(selected==='all'){
+      head.innerHTML='Diffusion à tout l\'équipage <button class="linkbtn" id="gClearAll" style="float:right;margin-top:2px;">🗑 VIDER LE FIL</button>';
+      $('gClearAll').onclick=async()=>{
+        if(!confirm('Vider le fil de diffusion générale ?\nL\'historique sera supprimé et l\'écran de tous les joueurs effacé.')) return;
+        const r=await api.clearAll();
+        if(r.error){ alert(r.error); return; }
+        for(let i=allMsgs.length-1;i>=0;i--){ if(allMsgs[i].to==='all') allMsgs.splice(i,1); }
+        renderConv();
+      };
+    }
     else{
       head.innerHTML='Canal privé — '+esc(selected)+' <button class="linkbtn" id="gResetCode" style="float:right;margin-top:2px;">RÉINIT. CODE</button>';
       $('gResetCode').onclick=async()=>{
@@ -636,19 +698,36 @@
         alert(r.ok?'Code de '+selected+' réinitialisé.':(r.error||'Erreur.'));
       };
     }
-    const log=$('gmLog'); log.innerHTML='';
-    const rel = selected==='all'
+    const log=$('gmLog');
+    const wasAtBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    const prevScroll = log.scrollTop;
+    log.innerHTML='';
+    const deleted=new Set(allMsgs.filter(m=>m.kind==='delete').map(m=>m.text));
+    let rel = selected==='all'
       ? allMsgs.filter(m=>m.to==='all')
       : allMsgs.filter(m=> (m.frm==='MJ'&&m.to===selected) || (m.frm===selected) || (m.to==='all'&&false));
+    rel=rel.filter(m=>m.kind!=='delete' && !deleted.has(String(m.id)));
     rel.forEach(m=>{
       const d=document.createElement('div');
       if(m.kind==='clear'||m.kind==='boot'){ d.className='msg system'; d.textContent='['+(m.kind==='clear'?'écran effacé':'séquence de démarrage')+']'; log.appendChild(d); return; }
       const out=(m.frm==='MJ');
       d.className='msg '+(out?'out':'in')+(m.kind==='alert'?' alert':'');
       d.innerHTML='<span class="meta">'+esc(out?('IA → '+(m.to==='all'?'tous':m.to)):(m.frm+' → IA'))+'</span>'+esc(m.text);
+      const x=document.createElement('button'); x.className='mdel'; x.textContent='✕'; x.title='Supprimer ce message (disparaît aussi de l\'écran du joueur)';
+      x.onclick=async ev=>{
+        ev.stopPropagation();
+        if(!confirm('Supprimer ce message ?\nIl disparaîtra aussi de l\'écran du joueur.')) return;
+        const r=await api.delMsg(m.id);
+        if(r.error){ alert(r.error); return; }
+        const i=allMsgs.indexOf(m); if(i>=0) allMsgs.splice(i,1);
+        renderConv();
+      };
+      d.appendChild(x);
       log.appendChild(d);
     });
-    log.scrollTop=log.scrollHeight;
+    if(renderConv._force || wasAtBottom){ log.scrollTop=log.scrollHeight; }
+    else{ log.scrollTop=prevScroll; }
+    renderConv._force=false;
   }
   // re-render conv MJ quand de nouveaux messages arrivent
   const _pump=pump; // (joueur) inchangé
