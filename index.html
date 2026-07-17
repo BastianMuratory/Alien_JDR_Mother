@@ -153,7 +153,7 @@
   .chip.manage{border-style:dashed;color:var(--phosphor);}
 
   /* ---------- PANNEAU MESSAGES RAPIDES / COMPTE À REBOURS ---------- */
-  #quickPanel,#timerPanel,#userPanel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:30;}
+  #quickPanel,#timerPanel,#userPanel,#dicePanel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:30;}
   .qcard{width:min(700px,94vw);max-height:86vh;display:flex;flex-direction:column;background:#070b09;border:1px solid var(--phosphor-dim);padding:18px 20px;}
   .qcard .qtitle{font-family:'VT323',monospace;font-size:26px;color:var(--phosphor);letter-spacing:1px;}
   .qcard .qsub{font-size:12px;color:var(--phosphor-dim);margin:4px 0 14px;}
@@ -168,6 +168,25 @@
   .qrow .qdel{flex:0 0 auto;background:transparent;color:var(--alert);border:1px solid var(--panel-line);cursor:pointer;padding:0 10px;font-family:'Share Tech Mono',monospace;}
   .qrow .qdel:hover{border-color:var(--alert);}
   .qbtns{display:flex;gap:10px;margin-top:12px;align-items:center;}
+
+  /* ---------- PANNEAU DÉS ---------- */
+  #dicePanel .qcard{width:min(620px,94vw);}
+  .drow{display:flex;gap:26px;margin:8px 0 4px;font-size:13px;color:var(--phosphor-dim);flex-wrap:wrap;}
+  .drow label{display:flex;gap:8px;align-items:center;letter-spacing:1px;}
+  .drow label.stress{color:var(--alert);}
+  .dstep{width:32px;height:32px;background:transparent;border:1px solid var(--panel-line);color:inherit;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:16px;}
+  .dstep:hover{border-color:currentColor;}
+  .dcount{font-family:'VT323',monospace;font-size:28px;min-width:28px;text-align:center;}
+  #dResult{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 10px;min-height:44px;}
+  .die{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:1px solid var(--phosphor-dim);
+    color:var(--phosphor);font-family:'VT323',monospace;font-size:27px;}
+  .die.stress{border-color:var(--alert);color:var(--alert);}
+  .die.six{background:var(--phosphor);color:#000;box-shadow:0 0 10px var(--glow);}
+  .die.stress.six{background:var(--alert);color:#000;box-shadow:0 0 10px var(--alert-glow);}
+  .die.panic{background:var(--alert);color:#000;box-shadow:0 0 14px var(--alert-glow);animation:dblink .8s steps(2) infinite;}
+  @keyframes dblink{50%{opacity:.45;}}
+  #dSummary{font-family:'VT323',monospace;font-size:23px;color:var(--phosphor);min-height:28px;}
+  #dSummary .pan{color:var(--alert);text-shadow:0 0 8px var(--alert-glow);}
 
   /* ---------- PANNEAU ÉQUIPAGE ---------- */
   #uList{flex:1;overflow-y:auto;min-height:60px;margin-top:12px;scrollbar-width:thin;scrollbar-color:var(--phosphor-dim) transparent;}
@@ -305,6 +324,7 @@
             <button class="btn" id="gClear">EFFACER SON ÉCRAN</button>
             <div class="sep"></div>
             <button class="btn" id="tOpen">⏱ COMPTE À REBOURS</button>
+            <button class="btn" id="dOpen">🎲 DÉS</button>
           </div>
         </div>
       </div>
@@ -322,6 +342,26 @@
       <button class="btn" id="qReset">RÉTABLIR DÉFAUTS</button>
       <span style="flex:1"></span>
       <button class="btn primary" id="qClose">FERMER</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- PANNEAU DÉS (MJ) ---------- -->
+<div id="dicePanel">
+  <div class="qcard">
+    <div class="qtitle">🎲 LANCER DE DÉS</div>
+    <div class="qsub">Alien RPG — 6 = succès · 1 sur un dé de stress = PANIQUE. Pousser : +1 dé de stress, relance tout sauf les 6 (et les 1 de stress).</div>
+    <div class="drow">
+      <label>BASE <button class="dstep" id="dBaseMinus">−</button><span class="dcount" id="dBaseN">5</span><button class="dstep" id="dBasePlus">+</button></label>
+      <label class="stress">STRESS <button class="dstep" id="dStressMinus">−</button><span class="dcount" id="dStressN">0</span><button class="dstep" id="dStressPlus">+</button></label>
+    </div>
+    <div id="dResult"></div>
+    <div id="dSummary"></div>
+    <div class="qbtns">
+      <button class="btn primary" id="dRoll">▶ LANCER</button>
+      <button class="btn" id="dPush" disabled>POUSSER (+1 STRESS)</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="dClose">FERMER</button>
     </div>
   </div>
 </div>
@@ -646,6 +686,40 @@
     });
     if(!presets.length){ const e=document.createElement('div'); e.className='qsub'; e.textContent='Aucun message. Clique sur + AJOUTER.'; list.appendChild(e); }
   }
+  // ---------- dés (MJ) ----------
+  let diceBase=5, diceStress=0, diceRes=null;
+  const d6=()=>1+Math.floor(Math.random()*6);
+  function diceCnt(which,delta){
+    if(which==='base') diceBase=Math.max(0,Math.min(15,diceBase+delta));
+    else diceStress=Math.max(0,Math.min(15,diceStress+delta));
+    $('dBaseN').textContent=diceBase; $('dStressN').textContent=diceStress;
+  }
+  function diceShow(){
+    const r=$('dResult'); r.innerHTML='';
+    diceRes.base.forEach(v=>{ const d=document.createElement('div'); d.className='die'+(v===6?' six':''); d.textContent=v; r.appendChild(d); });
+    diceRes.stress.forEach(v=>{ const d=document.createElement('div'); d.className='die stress'+(v===6?' six':'')+(v===1?' panic':''); d.textContent=v; r.appendChild(d); });
+    const succ=[...diceRes.base,...diceRes.stress].filter(v=>v===6).length;
+    const pan=diceRes.stress.filter(v=>v===1).length;
+    let s=succ+' SUCCÈS';
+    if(diceRes.pushed) s+=' (poussé)';
+    if(pan) s+=' · <span class="pan">⚠ '+pan+' × 1 SUR STRESS — JET DE PANIQUE !</span>';
+    $('dSummary').innerHTML=s;
+    $('dPush').disabled=diceRes.pushed||pan>0;
+  }
+  function diceRoll(){
+    if(diceBase+diceStress===0) return;
+    diceRes={base:Array.from({length:diceBase},d6),stress:Array.from({length:diceStress},d6),pushed:false};
+    diceShow();
+  }
+  function dicePush(){
+    if(!diceRes||diceRes.pushed) return;
+    diceRes.base=diceRes.base.map(v=>v===6?6:d6());
+    diceRes.stress=diceRes.stress.map(v=>(v===6||v===1)?v:d6());
+    diceRes.stress.push(d6());
+    diceStress=Math.min(15,diceStress+1); $('dStressN').textContent=diceStress;
+    diceRes.pushed=true;
+    diceShow();
+  }
   // ---------- gestion équipage (MJ) ----------
   async function loadUsers(){
     const r=await api.users({action:'list'});
@@ -728,6 +802,16 @@
     $('gClear').onclick=()=>gmSendKind('clear');
     $('gInput').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); gmSend('text'); } });
     $('gInput').addEventListener('input',()=>autoGrow($('gInput')));
+    // --- dés ---
+    $('dOpen').onclick=()=>{ $('dicePanel').style.display='flex'; };
+    $('dClose').onclick=()=>{ $('dicePanel').style.display='none'; };
+    $('dicePanel').addEventListener('click',e=>{ if(e.target.id==='dicePanel') $('dicePanel').style.display='none'; });
+    $('dBasePlus').onclick=()=>diceCnt('base',1);
+    $('dBaseMinus').onclick=()=>diceCnt('base',-1);
+    $('dStressPlus').onclick=()=>diceCnt('stress',1);
+    $('dStressMinus').onclick=()=>diceCnt('stress',-1);
+    $('dRoll').onclick=diceRoll;
+    $('dPush').onclick=dicePush;
     // --- compte à rebours ---
     $('tOpen').onclick=()=>{ $('timerPanel').style.display='flex'; };
     $('tClose').onclick=()=>{ $('timerPanel').style.display='none'; };
