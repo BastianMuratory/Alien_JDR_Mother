@@ -340,6 +340,9 @@
     <div class="qbtns">
       <button class="btn" id="qAdd">+ AJOUTER</button>
       <button class="btn" id="qReset">RÉTABLIR DÉFAUTS</button>
+      <button class="btn" id="qExport">EXPORTER</button>
+      <button class="btn" id="qImport">IMPORTER</button>
+      <input type="file" id="qImportFile" accept=".json,application/json" style="display:none">
       <span style="flex:1"></span>
       <button class="btn primary" id="qClose">FERMER</button>
     </div>
@@ -794,6 +797,30 @@
     $('uCode').addEventListener('keydown',e=>{ if(e.key==='Enter') $('uCreate').click(); });
     $('qAdd').onclick=()=>{ presets.push({label:'NOUVEAU',text:''}); savePresets(); renderQuickPanel(); const rows=$('qList').querySelectorAll('.qrow input'); if(rows.length) rows[rows.length-1].select(); };
     $('qReset').onclick=()=>{ if(confirm('Rétablir les messages par défaut ? Tes messages personnalisés seront perdus.')){ presets=DEFAULT_PRESETS.map(p=>({...p})); savePresets(); renderQuickPanel(); } };
+    $('qExport').onclick=()=>{
+      const blob=new Blob([JSON.stringify(presets,null,2)],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='messages-rapides.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+    $('qImport').onclick=()=>$('qImportFile').click();
+    $('qImportFile').onchange=e=>{
+      const f=e.target.files[0]; e.target.value='';
+      if(!f) return;
+      const rd=new FileReader();
+      rd.onload=()=>{
+        let p;
+        try{ p=JSON.parse(rd.result); }catch(err){ alert('Fichier invalide : ce n\'est pas du JSON.'); return; }
+        if(!Array.isArray(p)){ alert('Fichier invalide : format inattendu.'); return; }
+        p=p.filter(x=>x&&typeof x.label==='string'&&typeof x.text==='string').map(x=>({label:x.label,text:x.text}));
+        if(!p.length){ alert('Aucun message valide dans ce fichier.'); return; }
+        if(!confirm('Importer '+p.length+' message(s) ? Les messages actuels seront remplacés.')) return;
+        presets=p; savePresets(); renderQuickPanel();
+      };
+      rd.readAsText(f);
+    };
     $('qClose').onclick=()=>{ $('quickPanel').style.display='none'; renderQuick(); };
     $('quickPanel').addEventListener('click',e=>{ if(e.target.id==='quickPanel'){ $('quickPanel').style.display='none'; renderQuick(); } });
     $('gSend').onclick=()=>gmSend('text');
