@@ -18,6 +18,16 @@ Aucune dépendance : un seul fichier Python (bibliothèque standard) + un fichie
 3. **MJ** : ouvre `http://localhost:8000`, coche « Je suis le Maître du Jeu » et entre le code admin (par défaut `nostromo` — change-le en haut de `serveur.py`).
 4. **Joueurs** (même réseau Wi-Fi) : ouvrent `http://IP-DE-TON-PC:8000` (l'IP est affichée au lancement du serveur).
 
+### Démarrage automatique avec accès Internet (tunnel + QR code)
+
+Pour jouer avec des joueurs qui ne sont **pas sur ton réseau local**, le script `lancer.sh` fait tout d'un coup : il démarre le serveur, ouvre un tunnel public avec [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) et affiche dans le terminal l'URL publique, l'URL locale, le code MJ et un **QR code** à faire scanner aux joueurs :
+
+```
+./lancer.sh
+```
+
+`Ctrl+C` arrête proprement le serveur et le tunnel. Au premier lancement, le script installe l'outil QR dans un dossier `.venv/` (une seule fois). Port différent : `PORT=8123 ./lancer.sh`.
+
 ## Côté joueur
 
 ![Terminal joueur](captures/02-terminal-joueur.png)
